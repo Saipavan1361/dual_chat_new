@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Munnabhai Gaming – Live Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#0e0e10;--panel:#18181b;--text:#efeff1;--muted:#9a9aa5;--line:#2c2c33;--accent:#53fc18;--yt:#ff4e45;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column}
+#top.hidden{display:none}
+#stats{display:flex;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
+#ylist{display:contents}
+.st{flex:1 0 110px;min-width:0;padding:8px 6px;text-align:center;border-right:1px solid var(--line)}
+.st:last-child{border-right:0}
+.st b{display:block;font-size:32px;line-height:1.1;font-variant-numeric:tabular-nums}
+.st small{display:block;font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st.k b{color:var(--accent)}.st.y b{color:var(--yt)}
+.st.y{cursor:pointer}.st.y.sel{box-shadow:inset 0 -3px 0 var(--yt)}
+#tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 8px;background:var(--panel);border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
+button,select{padding:7px 12px;font-size:13px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);cursor:pointer}
+#lv{max-width:260px}
+button.on{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700}
+main{flex:1;min-height:0;display:grid;gap:2px;background:var(--line);grid-template-columns:1fr 1fr}
+@media (orientation:portrait){main{grid-template-columns:1fr;grid-template-rows:1fr 1fr}}
+main.sbs{grid-template-columns:1fr 1fr;grid-template-rows:none}
+main.stk{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+.pane{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--panel)}
+.pane iframe{flex:1;width:100%;border:0;background:var(--panel)}
+.ph{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:16px}
+#msgs{flex:1;overflow-y:auto;padding:8px;font-size:15px;line-height:1.4}
+.m{padding:3px 0;word-wrap:break-word;overflow-wrap:anywhere}
+.m .a{font-weight:700;color:#8ab4ff;margin-right:6px}
+.m .a.own{color:#ffd43b}.m .a.mod{color:#53fc18}.m .a.sp{color:#7bd88f}
+.m.sc{background:#3a2a00;border-left:3px solid #ffd43b;padding:4px 8px;margin:3px 0;border-radius:4px}
+#fab{position:fixed;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));opacity:.85;z-index:5;border-radius:999px}
+</style>
+</head>
+<body>
+<div id="top">
+  <div id="stats">
+    <div class="st k"><b id="vk">–</b><small id="nk">Kick viewers</small></div>
+    <div id="ylist"><div class="st y"><b>–</b><small>YouTube viewers</small></div></div>
+    <div class="st"><b id="vt">–</b><small>Total watching</small></div>
+  </div>
+  <div id="tools">
+    Layout:
+    <button id="lauto">Auto</button><button id="lsbs">Side by side</button><button id="lstk">Stacked</button>
+    YouTube chat:
+    <button id="mapi">From API</button><button id="memb">Embed (free)</button>
+    Live:
+    <select id="lv"><option value="">No live stream</option></select>
+    Refresh:
+    <select id="iv"><option value="10">10s</option><option value="15" selected>15s</option><option value="30">30s</option></select>
+    <span id="units"></span>
+    <span id="state"></span>
+  </div>
+</div>
+<main>
+  <div class="pane" id="pk"><div class="ph">Loading Kick chat…</div></div>
+  <div class="pane" id="py"><div class="ph">Looking for your YouTube live streams…</div></div>
+</main>
+<button id="fab">Hide bar</button>
+<script>
+/* ===== Your settings (personal use) ===== */
+var CONFIG={
+  ytHandle:"Munnabhaigaming",
+  kick:"munnabhai_gaming",
+  key:"AIzaSyBu9JQfBAPaE_IUZfP67EBR-77WZJfktwA"
+};
+/* ======================================== */
+var $=function(i){return document.getElementById(i)};
+var vid="",chatId="",uploads="",mode="api",pageToken="",chatTimer=null,statsTimer=null,chatFor="",embedFor="",lives=[];
+function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function get(k){try{return localStorage.getItem(k)||""}catch(e){return ""}}
+function fmt(n){return n==null?"–":Number(n).toLocaleString()}
+function unitsKey(){return "dc_units_"+new Date().toLocaleDateString("en-CA",{timeZone:"America/Los_Angeles"})}
+function showUnits(){$("units").textContent="API units today: "+fmt(parseInt(get(unitsKey())||"0",10))+" / 10,000"}
+function addUnits(n){save(unitsKey(),String(parseInt(get(unitsKey())||"0",10)+n));showUnits()}
+function api(path,cost){
+  addUnits(cost);
+  return fetch("https://www.googleapis.com/youtube/v3/"+path+"&key="+encodeURIComponent(CONFIG.key))
+    .then(function(r){return r.json()})
+    .then(function(j){if(j.error){var e=new Error(j.error.message);e.quota=/quota/i.test(j.error.message);throw e}return j});
+}
+function frame(pane,src,label){
+  pane.innerHTML="";
+  var f=document.createElement("iframe");
+  f.src=src;f.title=label;f.allow="clipboard-write";
+  pane.appendChild(f);
+}
+function msg(pane,t){pane.innerHTML='<div class="ph">'+t+'</div>'}
+
+/* ---- find ALL live videos on the channel (long form + shorts) ---- */
+function findLives(){
+  var p=uploads?Promise.resolve(uploads):api("channels?part=contentDetails&forHandle="+encodeURIComponent("@"+CONFIG.ytHandle),1).then(function(j){
+    if(!j.items||!j.items.length)throw new Error("Channel not found");
+    uploads=j.items[0].contentDetails.relatedPlaylists.uploads;return uploads;
+  });
+  return p.then(function(u){return api("playlistItems?part=contentDetails&maxResults=25&playlistId="+u,1)})
+  .then(function(j){
+    var ids=(j.items||[]).map(function(i){return i.contentDetails.videoId}).join(",");
+    return ids?api("videos?part=snippet,liveStreamingDetails&id="+ids,1):null;
+  }).then(function(j){
+    var out=[];
+    if(j)(j.items||[]).forEach(function(v){
+      if(v.snippet.liveBroadcastContent!=="live")return;
+      var d=v.liveStreamingDetails||{};
+      out.push({id:v.id,title:v.snippet.title||v.id,viewers:parseInt(d.concurrentViewers||"0",10)||0,chatId:d.activeLiveChatId||""});
+    });
+    out.sort(function(a,b){return b.viewers-a.viewers});
+    return out;
+  });
+}
+
+/* ---- one stats cell per YouTube live ---- */
+function renderYtCells(){
+  var box=$("ylist");box.innerHTML="";
+  lives.forEach(function(l){
+    var c=document.createElement("div");c.className="st y"+(l.id===vid?" sel":"");
+    var b=document.createElement("b");b.textContent=fmt(l.viewers);
+    var s=document.createElement("small");s.textContent=l.title;s.title=l.title+" – tap to show its chat";
+    c.appendChild(b);c.appendChild(s);
+    c.onclick=function(){$("lv").value=l.id;$("lv").onchange()};
+    box.appendChild(c);
+  });
+}
+function ytSingle(n,label){
+  $("ylist").innerHTML='<div class="st y"><b>'+n+'</b><small></small></div>';
+  $("ylist").querySelector("small").textContent=label;
+}
+
+/* ---- live picker ---- */
+function renderLives(){
+  var sel=$("lv"),sig=lives.map(function(l){return l.id}).join(",")+"|"+vid;
+  if(!lives.length){sel.innerHTML='<option value="">No live stream</option>';sel.dataset.sig="";return}
+  function label(l){var t=l.title.length>38?l.title.slice(0,38)+"…":l.title;return t+" ("+fmt(l.viewers)+")"}
+  if(sel.dataset.sig!==sig){
+    sel.innerHTML="";
+    lives.forEach(function(l){var o=document.createElement("option");o.value=l.id;o.textContent=label(l);sel.appendChild(o)});
+    sel.dataset.sig=sig;
+  }else{
+    for(var i=0;i<sel.options.length;i++){var l=lives.filter(function(x){return x.id===sel.options[i].value})[0];if(l)sel.options[i].textContent=label(l)}
+  }
+  sel.value=vid;
+}
+function selectedLive(){return lives.filter(function(l){return l.id===vid})[0]}
+
+/* ---- YouTube stats + chat id ---- */
+function refreshYt(){
+  return findLives().then(function(found){
+    lives=found;
+    if(!lives.length){
+      var wasLive=!!vid;
+      vid="";chatId="";chatFor="";embedFor="";clearTimeout(chatTimer);
+      renderLives();
+      ytSingle("0","YouTube not live");$("state").textContent="Not live – rechecking every 90s";
+      if(wasLive)msg($("py"),"Looking for your YouTube live streams…");
+      return 0;
+    }
+    if(!selectedLive())vid=lives[0].id;   /* default: stream with most viewers */
+    var cur=selectedLive();
+    chatId=cur.chatId;
+    renderLives();
+    var total=lives.reduce(function(s,l){return s+l.viewers},0);
+    $("state").textContent="YouTube LIVE";
+    renderYtCells();
+    startChat();
+    return total;
+  });
+}
+
+/* ---- YouTube chat: API mode ---- */
+function addMsg(it){
+  var s=it.snippet,a=it.authorDetails||{},el=document.createElement("div"),text="",sc=false;
+  if(s.type==="superChatEvent"&&s.superChatDetails){sc=true;text=s.superChatDetails.amountDisplayString+" "+(s.superChatDetails.userComment||"")}
+  else if(s.displayMessage)text=s.displayMessage;
+  else return;
+  el.className="m"+(sc?" sc":"");
+  var n=document.createElement("span");
+  n.className="a"+(a.isChatOwner?" own":a.isChatModerator?" mod":a.isChatSponsor?" sp":"");
+  n.textContent=a.displayName||"";
+  el.appendChild(n);el.appendChild(document.createTextNode(text));
+  $("msgs").appendChild(el);
+}
+function pollChat(){
+  clearTimeout(chatTimer);
+  if(mode!=="api"||!chatId)return;
+  var forChat=chatId;
+  var url="liveChat/messages?liveChatId="+encodeURIComponent(chatId)+"&part=snippet,authorDetails&maxResults=200"+(pageToken?"&pageToken="+encodeURIComponent(pageToken):"");
+  api(url,5).then(function(j){
+    if(forChat!==chatId)return;   /* user switched streams meanwhile */
+    var box=$("msgs");if(!box)return;
+    var near=box.scrollHeight-box.scrollTop-box.clientHeight<80;
+    (j.items||[]).forEach(addMsg);
+    while(box.children.length>300)box.removeChild(box.firstChild);
+    if(near)box.scrollTop=box.scrollHeight;
+    pageToken=j.nextPageToken||"";
+    var every=Math.max(j.pollingIntervalMillis||5000,parseInt($("iv").value,10)*1000);
+    chatTimer=setTimeout(pollChat,every);
+  }).catch(function(e){
+    if(e.quota){setMode("embed");$("state").textContent="Quota used up – switched to embed chat";return}
+    $("state").textContent="Chat error: "+e.message;
+    chatTimer=setTimeout(pollChat,30000);
+  });
+}
+function startChat(){
+  if(mode==="api"){
+    if(!chatId){chatFor="";clearTimeout(chatTimer);msg($("py"),"Chat isn’t available for this stream. Pick another live from the dropdown.");return}
+    if(chatFor===chatId)return;
+    chatFor=chatId;pageToken="";
+    $("py").innerHTML='<div id="msgs"></div>';
+    pollChat();
+  }else{
+    if(embedFor===vid||!vid)return;
+    embedFor=vid;
+    frame($("py"),"https://www.youtube.com/live_chat?v="+vid+"&embed_domain="+encodeURIComponent(location.hostname||"localhost")+"&dark_theme=1","YouTube chat");
+  }
+}
+function setMode(m){
+  mode=m;save("dc_mode",m);
+  $("mapi").className=m==="api"?"on":"";
+  $("memb").className=m==="embed"?"on":"";
+  clearTimeout(chatTimer);chatFor="";embedFor="";
+  if(vid)startChat();
+  else msg($("py"),"Looking for your YouTube live streams…");
+}
+
+/* ---- Kick ---- */
+function pollKick(){
+  return fetch("https://kick.com/api/v2/channels/"+CONFIG.kick).then(function(r){return r.json()}).then(function(j){
+    if(j&&j.livestream){$("vk").textContent=fmt(j.livestream.viewer_count);$("nk").textContent="Kick viewers (live)";return j.livestream.viewer_count}
+    $("vk").textContent="0";$("nk").textContent="Kick offline";return 0;
+  }).catch(function(){$("vk").textContent="–";$("nk").textContent="Kick count blocked";return null});
+}
+
+/* ---- main loop ---- */
+function tick(){
+  clearTimeout(statsTimer);
+  Promise.all([pollKick(),refreshYt().catch(function(e){
+    ytSingle("–","YouTube: "+e.message);return null;
+  })]).then(function(r){
+    var t=null;r.forEach(function(n){if(n!=null)t=(t||0)+n});
+    $("vt").textContent=fmt(t);
+    statsTimer=setTimeout(tick,lives.length?30000:90000);
+  });
+}
+
+function setLayout(l){
+  save("dc_layout",l);
+  var m=document.querySelector("main");
+  m.className=l==="sbs"||l==="stk"?l:"";
+  $("lauto").className=l==="auto"?"on":"";
+  $("lsbs").className=l==="sbs"?"on":"";
+  $("lstk").className=l==="stk"?"on":"";
+}
+$("lauto").onclick=function(){setLayout("auto")};
+$("lsbs").onclick=function(){setLayout("sbs")};
+$("lstk").onclick=function(){setLayout("stk")};
+setLayout(get("dc_layout")||"auto");
+$("mapi").onclick=function(){setMode("api")};
+$("memb").onclick=function(){setMode("embed")};
+$("iv").onchange=function(){save("dc_iv",$("iv").value)};
+$("lv").onchange=function(){
+  var l=lives.filter(function(x){return x.id===$("lv").value})[0];
+  if(!l)return;
+  vid=l.id;chatId=l.chatId;chatFor="";embedFor="";pageToken="";
+  clearTimeout(chatTimer);renderYtCells();
+  startChat();
+};
+$("fab").onclick=function(){var b=$("top");b.classList.toggle("hidden");$("fab").textContent=b.classList.contains("hidden")?"Show bar":"Hide bar"};
+$("iv").value=get("dc_iv")||"15";
+frame($("pk"),"https://kick.com/popout/"+CONFIG.kick+"/chat","Kick chat");
+showUnits();
+mode=get("dc_mode")||"api";
+setMode(mode);
+tick();
+</script>
+</body>
+</html>
