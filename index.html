@@ -133,6 +133,7 @@ main.none{display:none}
   <div class="col" id="kcol">
     <section class="tiles" aria-label="Kick statistics">
       <div class="st k" data-tile="kv"><b id="vk">–</b><h2>Kick live viewers</h2></div>
+      <div class="st k" data-tile="kf"><b id="fk">–</b><h2>Kick followers</h2></div>
     </section>
     <section class="pane" id="pk" data-tile="ck" aria-label="Kick live chat"><div class="phd"><h2 style="color:var(--kick)">Kick live chat</h2><a id="ok" href="#" target="_blank" rel="noopener">Open on Kick</a></div><div class="ph" id="pkb">Loading Kick chat…</div></section>
   </div>
@@ -140,6 +141,7 @@ main.none{display:none}
     <section class="tiles" id="ytiles" aria-label="YouTube statistics">
       <div class="st y comb" data-tile="yv"><b id="vy">–</b><h2>YouTube live viewers</h2></div>
       <div class="st l comb" data-tile="yl"><b id="vl">–</b><h2>YouTube likes</h2></div>
+      <div class="st y" data-tile="ys"><b id="fy">–</b><h2>YouTube subscribers</h2></div>
       <div id="ysep"></div>
     </section>
     <section class="pane" id="py" data-tile="cy" aria-label="YouTube live chat"><div class="phd"><h2 style="color:var(--yt)">YouTube live chat</h2><a id="oy" href="#" target="_blank" rel="noopener">Open on YouTube</a></div><div class="ph" id="pyb">Looking for your YouTube live streams…</div></section>
@@ -179,7 +181,7 @@ function msg(bodyId,t){var old=host(bodyId),d=document.createElement("div");d.cl
 
 /* ===== Tile visibility (presentation only: data keeps updating) ===== */
 var TILES=[
- ["kv","Kick live viewers","s"],["yv","YouTube live viewers","s"],["tv","Total live viewers","s"],["yl","YouTube likes","s"],
+ ["kv","Kick live viewers","s"],["kf","Kick followers","s"],["ys","YouTube subscribers","s"],["yv","YouTube live viewers","s"],["tv","Total live viewers","s"],["yl","YouTube likes","s"],
  ["ck","Kick live chat","p"],["cy","YouTube live chat","p"]];
 var VKEY="mb_tiles_v1",vis={};
 function defaults(){var o={};TILES.forEach(function(t){o[t[0]]=true});return o}
@@ -224,7 +226,7 @@ function refreshStamps(){
   $s("lu-k").textContent=clock(lastOk.k);$s("lu-y").textContent=clock(lastOk.y);
   var limit=Math.max(120000,parseInt($("iv").value,10)*4000);
   var sk=lastOk.k&&Date.now()-lastOk.k>limit,sy=lastOk.y&&Date.now()-lastOk.y>limit*2;
-  ["kv"].forEach(function(t){stale(t,!!sk)});["yv","yl"].forEach(function(t){stale(t,!!sy)});
+  ["kv","kf"].forEach(function(t){stale(t,!!sk)});["yv","yl"].forEach(function(t){stale(t,!!sy)});
   $s("ek").textContent=lastOk.k?(sk?"Stale – last ok ":"Updated ")+clock(lastOk.k):"";
   $s("ey").textContent=lastOk.y?(sy?"Stale – last ok ":"Updated ")+clock(lastOk.y):"";
 }
@@ -254,10 +256,24 @@ function setYNum(m){
 }
 $("ycomb").onclick=function(){setYNum("comb")};$("ysepb").onclick=function(){setYNum("sep")};
 
+/* ===== YouTube subscribers (refreshed every 5 minutes to save API quota) ===== */
+var lastSubs=0;
+function setSubs(it){
+  var st=it&&it.statistics;if(!st)return;
+  $("fy").textContent=st.hiddenSubscriberCount?"Hidden":fmt(parseInt(st.subscriberCount,10));
+  lastSubs=Date.now();
+}
+function refreshSubs(){
+  if(Date.now()-lastSubs<300000)return Promise.resolve();
+  return api("channels?part=statistics&forHandle="+encodeURIComponent("@"+CONFIG.ytHandle),1)
+    .then(function(j){if(j.items&&j.items.length)setSubs(j.items[0])}).catch(function(){});
+}
+
 /* ===== YouTube: find all live videos ===== */
 function findLives(){
-  var p=uploads?Promise.resolve(uploads):api("channels?part=contentDetails&forHandle="+encodeURIComponent("@"+CONFIG.ytHandle),1).then(function(j){
+  var p=uploads?Promise.resolve(uploads):api("channels?part=contentDetails,statistics&forHandle="+encodeURIComponent("@"+CONFIG.ytHandle),1).then(function(j){
     if(!j.items||!j.items.length)throw new Error("Channel not found");
+    setSubs(j.items[0]);
     uploads=j.items[0].contentDetails.relatedPlaylists.uploads;return uploads;
   });
   return p.then(function(u){return api("playlistItems?part=contentDetails&maxResults=25&playlistId="+u,1)})
@@ -383,6 +399,7 @@ function pollKick(){
   return fetch("https://kick.com/api/v2/channels/"+CONFIG.kick).then(function(r){return r.json()}).then(function(j){
     lastOk.k=Date.now();$s("cs-k").textContent="Connected";
     var name=(j&&j.user&&j.user.username)||CONFIG.kick;$s("ki-ch").textContent=name;
+    var fc=j&&(j.followers_count!=null?j.followers_count:j.followersCount);$("fk").textContent=fc!=null?fmt(fc):"–";
     if(j&&j.livestream){
       kickLive=true;$("vk").textContent=fmt(j.livestream.viewer_count);
       $s("ki-s").textContent="Live";$s("ki-t").textContent=j.livestream.session_title||"–";
@@ -392,7 +409,7 @@ function pollKick(){
     kickLive=false;$("vk").textContent="0";$s("ki-s").textContent="Offline";$s("ki-t").textContent="–";$s("ki-c").textContent="–";
     setBadge("bk","Kick: offline","off");return 0;
   }).catch(function(){
-    kickLive=null;$("vk").textContent="–";$s("ek").textContent="Kick count blocked or unreachable";
+    kickLive=null;$("vk").textContent="–";$("fk").textContent="–";$s("ek").textContent="Kick count blocked or unreachable";
     $s("cs-k").textContent="Unavailable (request blocked or failed)";$s("ki-s").textContent="Unknown";
     setBadge("bk","Kick: status unknown","off");return null;
   });
@@ -406,7 +423,7 @@ function tick(){
     $s("cs-y").textContent=ytErr;$("vy").textContent="–";$s("ey").textContent="YouTube not reachable: "+e.message;setBadge("by","YouTube: status unknown","off");return null;
   })]).then(function(r){
     var t=null;r.forEach(function(n){if(n!=null)t=(t||0)+n});
-    $("vt").textContent=fmt(t);refreshStamps();applyShow();
+    $("vt").textContent=fmt(t);refreshStamps();applyShow();refreshSubs();
     statsTimer=setTimeout(tick,lives.length?30000:90000);
   });
 }
