@@ -72,6 +72,9 @@ main.none{display:none}
 .pane{flex:1;min-width:0;min-height:60vh;display:flex;flex-direction:column;background:var(--panel)}
 #ysep{display:contents}#ysep h2{overflow-wrap:anywhere}
 #ytiles.sep .comb{display:none}
+#ytiles.sep{display:flex;flex-wrap:wrap;gap:1px}
+#ytiles.sep .st{flex:1 1 130px}
+#ytiles.sep [data-tile="ys"]{flex:1 1 100%}
 #ytiles:not(.sep) #ysep{display:none}
 .phd{display:flex;align-items:center;gap:8px;padding:4px 10px;font-size:13px;border-bottom:1px solid var(--line)}
 .phd h2{font-size:14px}.phd a{margin-left:auto;font-size:12px}
@@ -141,8 +144,8 @@ main.none{display:none}
     <section class="tiles" id="ytiles" aria-label="YouTube statistics">
       <div class="st y comb" data-tile="yv"><b id="vy">–</b><h2>YouTube live viewers</h2></div>
       <div class="st l comb" data-tile="yl"><b id="vl">–</b><h2>YouTube likes</h2></div>
-      <div class="st y" data-tile="ys"><b id="fy">–</b><h2>YouTube subscribers</h2></div>
       <div id="ysep"></div>
+      <div class="st y" data-tile="ys"><b id="fy">–</b><h2>YouTube subscribers</h2></div>
     </section>
     <section class="pane" id="py" data-tile="cy" aria-label="YouTube live chat"><div class="phd"><h2 style="color:var(--yt)">YouTube live chat</h2><a id="oy" href="#" target="_blank" rel="noopener">Open on YouTube</a></div><div class="ph" id="pyb">Looking for your YouTube live streams…</div></section>
   </div>
