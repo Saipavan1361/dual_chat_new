@@ -68,13 +68,15 @@ main.stk,main.one{grid-template-columns:1fr!important}
 main.none{display:none}
 .col{display:flex;flex-direction:column;min-width:0;background:var(--panel)}
 .col.off{display:none}
+#topstats{display:flex;gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+#topstats .st{flex:1 1 0;display:flex;flex-direction:column;justify-content:center}
+#topstats .st.t{flex:1.4 1 0}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
 .pane{flex:1;min-width:0;min-height:60vh;display:flex;flex-direction:column;background:var(--panel)}
 #ysep{display:contents}#ysep h2{overflow-wrap:anywhere}
 #ytiles.sep .comb{display:none}
 #ytiles.sep{display:flex;flex-wrap:wrap;gap:1px}
 #ytiles.sep .st{flex:1 1 130px}
-#ytiles.sep [data-tile="ys"]{flex:1 1 100%}
 #ytiles:not(.sep) #ysep{display:none}
 .phd{display:flex;align-items:center;gap:8px;padding:4px 10px;font-size:13px;border-bottom:1px solid var(--line)}
 .phd h2{font-size:14px}.phd a{margin-left:auto;font-size:12px}
@@ -115,7 +117,11 @@ main.none{display:none}
   <div id="title"></div>
 </header>
 
-<div class="st t" id="tvbar" data-tile="tv"><b id="vt">–</b><h2>Total live viewers</h2></div>
+<div id="topstats">
+  <div class="st k" data-tile="kf"><b id="fk">–</b><h2>Kick followers</h2></div>
+  <div class="st t" id="tvbar" data-tile="tv"><b id="vt">–</b><h2>Total live viewers</h2></div>
+  <div class="st y" data-tile="ys"><b id="fy">–</b><h2>YouTube subscribers</h2></div>
+</div>
 
 <div id="tools" role="toolbar" aria-label="Layout and refresh settings">
   <div class="g"><span id="l-lay">Layout:</span>
@@ -136,7 +142,6 @@ main.none{display:none}
   <div class="col" id="kcol">
     <section class="tiles" aria-label="Kick statistics">
       <div class="st k" data-tile="kv"><b id="vk">–</b><h2>Kick live viewers</h2></div>
-      <div class="st k" data-tile="kf"><b id="fk">–</b><h2>Kick followers</h2></div>
     </section>
     <section class="pane" id="pk" data-tile="ck" aria-label="Kick live chat"><div class="phd"><h2 style="color:var(--kick)">Kick live chat</h2><a id="ok" href="#" target="_blank" rel="noopener">Open on Kick</a></div><div class="ph" id="pkb">Loading Kick chat…</div></section>
   </div>
@@ -145,7 +150,6 @@ main.none{display:none}
       <div class="st y comb" data-tile="yv"><b id="vy">–</b><h2>YouTube live viewers</h2></div>
       <div class="st l comb" data-tile="yl"><b id="vl">–</b><h2>YouTube likes</h2></div>
       <div id="ysep"></div>
-      <div class="st y" data-tile="ys"><b id="fy">–</b><h2>YouTube subscribers</h2></div>
     </section>
     <section class="pane" id="py" data-tile="cy" aria-label="YouTube live chat"><div class="phd"><h2 style="color:var(--yt)">YouTube live chat</h2><a id="oy" href="#" target="_blank" rel="noopener">Open on YouTube</a></div><div class="ph" id="pyb">Looking for your YouTube live streams…</div></section>
   </div>
