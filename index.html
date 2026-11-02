@@ -71,7 +71,8 @@ main.none{display:none}
 #ytiles.sep .st{flex:1 1 130px}
 #ytiles:not(.sep) #ysep{display:none}
 .phd{display:flex;align-items:center;gap:8px;padding:4px 10px;font-size:13px;border-bottom:1px solid var(--line)}
-.phd h2{font-size:14px}.phd a{margin-left:auto;font-size:12px}
+.phd h2{font-size:14px}.phd a{font-size:12px}
+.phd button{margin-left:auto;padding:2px 10px;min-height:28px;font-size:12px}
 .pane iframe{flex:1;width:100%;border:0;min-height:300px;background:var(--panel)}
 .ph{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:16px}
 #fab{position:fixed;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));opacity:.85;z-index:5;border-radius:999px}
@@ -115,7 +116,7 @@ body.compact #hdr,body.compact #tools,body.compact #fab{display:none}
   <div class="st y" data-tile="ys"><b id="fy">–</b><h2>YouTube subscribers</h2></div>
 </div>
 
-<div id="tools" role="toolbar" aria-label="Layout and refresh settings">
+<div id="tools" role="toolbar" aria-label="Layout settings">
   <div class="g"><span>Layout:</span>
     <button id="lauto" type="button">Auto</button><button id="lsbs" type="button">Side by side</button><button id="lstk" type="button">Stacked</button></div>
   <div class="g"><span>Show:</span>
@@ -124,8 +125,6 @@ body.compact #hdr,body.compact #tools,body.compact #fab{display:none}
     <button id="ycomb" type="button">Combined</button><button id="ysepb" type="button">Separate</button></div>
   <div class="g"><label for="lv">Live stream:</label>
     <select id="lv"><option value="">No live stream</option></select></div>
-  <div class="g"><label for="iv">Chat refresh:</label>
-    <select id="iv"><option value="10">10s</option><option value="15" selected>15s</option><option value="30">30s</option></select></div>
   <div class="g" role="status" aria-live="polite" style="margin-left:auto"><span id="state"></span><span id="units"></span></div>
 </div>
 </div>
@@ -134,7 +133,7 @@ body.compact #hdr,body.compact #tools,body.compact #fab{display:none}
     <section class="tiles" aria-label="Kick statistics">
       <div class="st k" data-tile="kv"><b id="vk">–</b><h2>Kick live viewers</h2></div>
     </section>
-    <section class="pane" id="pk" data-tile="ck" aria-label="Kick live chat"><div class="phd"><h2 style="color:var(--kick)">Kick live chat</h2><a id="ok" href="#" target="_blank" rel="noopener">Open on Kick</a></div><div class="ph" id="pkb">Loading Kick chat…</div></section>
+    <section class="pane" id="pk" data-tile="ck" aria-label="Kick live chat"><div class="phd"><h2 style="color:var(--kick)">Kick live chat</h2><button id="rlk" type="button">Reload chat</button><a id="ok" href="#" target="_blank" rel="noopener">Open on Kick</a></div><div class="ph" id="pkb">Loading Kick chat…</div></section>
   </div>
   <div class="col" id="ycol">
     <section class="tiles" id="ytiles" aria-label="YouTube statistics">
@@ -142,7 +141,7 @@ body.compact #hdr,body.compact #tools,body.compact #fab{display:none}
       <div class="st l comb" data-tile="yl"><b id="vl">–</b><h2>YouTube likes</h2></div>
       <div id="ysep"></div>
     </section>
-    <section class="pane" id="py" data-tile="cy" aria-label="YouTube live chat"><div class="phd"><h2 style="color:var(--yt)">YouTube live chat</h2><a id="oy" href="#" target="_blank" rel="noopener">Open on YouTube</a></div><div class="ph" id="pyb">Looking for your YouTube live streams…</div></section>
+    <section class="pane" id="py" data-tile="cy" aria-label="YouTube live chat"><div class="phd"><h2 style="color:var(--yt)">YouTube live chat</h2><button id="rly" type="button">Reload chat</button><a id="oy" href="#" target="_blank" rel="noopener">Open on YouTube</a></div><div class="ph" id="pyb">Looking for your YouTube live streams…</div></section>
   </div>
 </main>
 <button id="fab" type="button">Hide bar</button>
@@ -156,17 +155,21 @@ var CONFIG={
 };
 /* Paste your logo ONCE here as a data:image/jpeg;base64,... string (used for header AND favicon) */
 var LOGO="";
+var CHAT_RELOAD_MS=300000;   /* YouTube chat auto-reloads every 5 min while the page is visible */
+var LIVE_POLL_MS=60000;      /* stats refresh while live */
+var IDLE_POLL_MS=90000;      /* stats refresh while offline */
 /* ================================================== */
 var $=function(i){return document.getElementById(i)};
 var $s=function(i){return document.getElementById(i)||document.createElement("span")};
 var kickLive=null,show="auto",vid="",uploads="",statsTimer=null,embedFor="",lives=[],ytOK=false,idle=false;
-var ended={};                 /* videos whose chat/stream is known to be finished */
+var ended={};
 var lastOk={k:0,y:0};
+var liveIds=[],lastScan=0,chatLoadedAt=0,hiddenAt=0;
 function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function get(k){try{return localStorage.getItem(k)||""}catch(e){return ""}}
 function fmt(n){return n==null?"–":Number(n).toLocaleString()}
 function unitsKey(){return "dc_units_"+new Date().toLocaleDateString("en-CA",{timeZone:"America/Los_Angeles"})}
-function showUnits(){$s("units").textContent="API units today: "+fmt(parseInt(get(unitsKey())||"0",10))+" / 10,000"}
+function showUnits(){$s("units").textContent="API units today (this device): "+fmt(parseInt(get(unitsKey())||"0",10))+" / 10,000"}
 function addUnits(n){save(unitsKey(),String(parseInt(get(unitsKey())||"0",10)+n));showUnits()}
 function setState(t){$s("state").textContent=t?t+" · ":""}
 function api(path,cost){
@@ -240,8 +243,7 @@ document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!$("cust-pa
 function setBadge(id,text,state){var b=$(id);b.textContent=text;b.className="badge"+(state==="live"?" live "+(id==="bk"?"k":"y"):state==="off"?" off":"")}
 function stale(tile,on){var els=document.querySelectorAll('[data-tile="'+tile+'"]');for(var i=0;i<els.length;i++)els[i].classList.toggle("stale",on)}
 function refreshStamps(){
-  var limit=Math.max(120000,parseInt($("iv").value,10)*4000);
-  var sk=lastOk.k&&Date.now()-lastOk.k>limit,sy=lastOk.y&&Date.now()-lastOk.y>limit*2;
+  var sk=lastOk.k&&Date.now()-lastOk.k>120000,sy=lastOk.y&&Date.now()-lastOk.y>240000;
   ["kv","kf"].forEach(function(t){stale(t,!!sk)});["yv","yl"].forEach(function(t){stale(t,!!sy)});
 }
 setInterval(refreshStamps,5000);
@@ -283,26 +285,32 @@ function refreshSubs(){
     .then(function(j){if(j.items&&j.items.length)setSubs(j.items[0])}).catch(function(){});
 }
 
-/* ===== YouTube: find CURRENTLY live videos only ===== */
+/* ===== YouTube: find CURRENTLY live videos (quota-saving) =====
+   Full playlist scan only every 5 min (or when nothing is known live);
+   in between, only the known live videos are polled (1 unit). */
 function findLives(){
-  var p=uploads?Promise.resolve(uploads):api("channels?part=contentDetails,statistics&forHandle="+encodeURIComponent("@"+CONFIG.ytHandle),1).then(function(j){
-    if(!j.items||!j.items.length)throw new Error("Channel not found");
-    setSubs(j.items[0]);
-    uploads=j.items[0].contentDetails.relatedPlaylists.uploads;return uploads;
-  });
-  return p.then(function(u){return api("playlistItems?part=contentDetails&maxResults=25&playlistId="+u,1)})
-  .then(function(j){
-    var ids=(j.items||[]).map(function(i){return i.contentDetails.videoId}).join(",");
-    return ids?api("videos?part=snippet,liveStreamingDetails,statistics&id="+ids,1):null;
+  var full=!liveIds.length||Date.now()-lastScan>300000,p;
+  if(!full){p=Promise.resolve(liveIds)}
+  else{
+    var u=uploads?Promise.resolve(uploads):api("channels?part=contentDetails,statistics&forHandle="+encodeURIComponent("@"+CONFIG.ytHandle),1).then(function(j){
+      if(!j.items||!j.items.length)throw new Error("Channel not found");
+      setSubs(j.items[0]);
+      uploads=j.items[0].contentDetails.relatedPlaylists.uploads;return uploads;
+    });
+    p=u.then(function(u){return api("playlistItems?part=contentDetails&maxResults=25&playlistId="+u,1)})
+      .then(function(j){lastScan=Date.now();return (j.items||[]).map(function(i){return i.contentDetails.videoId})});
+  }
+  return p.then(function(ids){
+    return ids.length?api("videos?part=snippet,liveStreamingDetails,statistics&id="+ids.join(","),1):null;
   }).then(function(j){
     var out=[];
     if(j)(j.items||[]).forEach(function(v){
       var d=v.liveStreamingDetails||{};
-      /* really live = flagged live, has started, has NOT ended, and chat not known to be finished */
       if(v.snippet.liveBroadcastContent!=="live"||!d.actualStartTime||d.actualEndTime||ended[v.id])return;
       out.push({id:v.id,title:v.snippet.title||v.id,viewers:parseInt(d.concurrentViewers||"0",10)||0,likes:(v.statistics&&v.statistics.likeCount!=null)?parseInt(v.statistics.likeCount,10):null});
     });
     out.sort(function(a,b){return b.viewers-a.viewers});
+    liveIds=out.map(function(l){return l.id});
     return out;
   });
 }
@@ -324,13 +332,12 @@ function refreshYt(){
   return findLives().then(function(found){
     lives=found;ytOK=true;lastOk.y=Date.now();renderYtTiles();
     if(!lives.length){
-      /* nothing live: fully reset chat so an ended stream is never shown again */
-      vid="";embedFor="";
+      vid="";embedFor="";chatLoadedAt=0;
       renderLives();
       $("vl").textContent="–";$("vy").textContent="0";
       setBadge("by","YouTube: offline","off");$("title").textContent="";
       $("oy").href="https://www.youtube.com/@"+encodeURIComponent(CONFIG.ytHandle);
-      setState("YouTube not live – rechecking every 90s");
+      setState("YouTube not live – rechecking every "+(IDLE_POLL_MS/1000)+"s");
       if(!idle){msg("pyb","No YouTube live right now. Checking again soon…");idle=true}
       return 0;
     }
@@ -350,12 +357,19 @@ function refreshYt(){
   });
 }
 
-/* ===== YouTube chat (embed only) ===== */
+/* ===== YouTube chat (embed) with auto-reload + manual reload ===== */
 function startChat(){
   if(!vid||embedFor===vid)return;
-  embedFor=vid;
+  embedFor=vid;chatLoadedAt=Date.now();
   frame("pyb","https://www.youtube.com/live_chat?v="+vid+"&embed_domain="+encodeURIComponent(location.hostname||"localhost")+"&dark_theme=1","YouTube live chat");
 }
+function reloadYtChat(){if(vid){embedFor="";startChat()}}
+function reloadKickChat(){frame("pkb","https://kick.com/popout/"+CONFIG.kick+"/chat","Kick live chat")}
+$("rly").onclick=reloadYtChat;
+$("rlk").onclick=reloadKickChat;
+setInterval(function(){
+  if(!document.hidden&&vid&&chatLoadedAt&&Date.now()-chatLoadedAt>CHAT_RELOAD_MS)reloadYtChat();
+},60000);
 
 /* ===== Kick ===== */
 function pollKick(){
@@ -378,19 +392,22 @@ function pollKick(){
 function tick(){
   clearTimeout(statsTimer);
   Promise.all([pollKick(),refreshYt().catch(function(e){
-    ytOK=false;lives=[];renderYtTiles();
+    ytOK=false;lives=[];liveIds=[];renderYtTiles();
     $("vy").textContent="–";setState("YouTube error: "+e.message);setBadge("by","YouTube: status unknown","off");return null;
   })]).then(function(r){
     var t=null;r.forEach(function(n){if(n!=null)t=(t||0)+n});
     $("vt").textContent=fmt(t);refreshStamps();applyShow();refreshSubs();
   }).catch(function(){}).then(function(){
     clearTimeout(statsTimer);
-    if(!document.hidden)statsTimer=setTimeout(tick,lives.length?30000:90000);
+    if(!document.hidden)statsTimer=setTimeout(tick,lives.length?LIVE_POLL_MS:IDLE_POLL_MS);
   });
 }
+/* iPad/Safari freezes embeds in the background: reload both chats if hidden > 1 min */
 document.addEventListener("visibilitychange",function(){
-  if(document.hidden)clearTimeout(statsTimer);
-  else tick();
+  if(document.hidden){hiddenAt=Date.now();clearTimeout(statsTimer);return}
+  if(hiddenAt&&Date.now()-hiddenAt>60000){reloadYtChat();reloadKickChat()}
+  hiddenAt=0;
+  tick();
 });
 
 /* ===== layout / show controls ===== */
@@ -420,7 +437,6 @@ function setLayout(l){
   [["auto","lauto"],["sbs","lsbs"],["stk","lstk"]].forEach(function(p){$(p[1]).className=l===p[0]?"on":"";$(p[1]).setAttribute("aria-pressed",l===p[0])});
 }
 $("lauto").onclick=function(){setLayout("auto")};$("lsbs").onclick=function(){setLayout("sbs")};$("lstk").onclick=function(){setLayout("stk")};
-$("iv").onchange=function(){save("dc_iv",$("iv").value)};
 $("lv").onchange=function(){
   var l=lives.filter(function(x){return x.id===$("lv").value})[0];
   if(!l)return;
@@ -444,8 +460,7 @@ setLayout(get("dc_layout")||"auto");
 show=["auto","both","kick","yt"].indexOf(get("dc_show"))>=0?get("dc_show"):"auto";
 if(["kick","yt","both"].indexOf(Q.get("show"))>=0)show=Q.get("show");   /* e.g. ?chatonly&show=yt */
 applyShow();
-$("iv").value=["10","15","30"].indexOf(get("dc_iv"))>=0?get("dc_iv"):"15";
-frame("pkb","https://kick.com/popout/"+CONFIG.kick+"/chat","Kick live chat");
+reloadKickChat();
 showUnits();
 idle=true;
 tick();
